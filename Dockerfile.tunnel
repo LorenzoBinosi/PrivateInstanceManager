@@ -1,0 +1,10 @@
+FROM ubuntu:noble-20240801
+
+# Install required packages
+RUN apt-get update && \
+    apt-get install -y gcc g++ libboost-all-dev make && \
+    apt-get clean
+COPY code /root/code
+WORKDIR /root/code
+RUN make tunnel
+

@@ -4,7 +4,7 @@ CXXFLAGS = -Wall -std=c++17 -I$(INCDIR) -O3
 LDFLAGS = -lboost_system -lboost_date_time 
 
 # Directories
-INCDIR = hpp
+INCDIR = include
 SRCDIR = src
 OBJDIR = obj
 

@@ -1,0 +1,39 @@
+services:
+  tunnel:
+    environment:
+      - TIMEOUT=600
+      - TUNNEL_PORT=4002
+      - API_PORT=4001
+      - INSTANCE_ENDPOINT=dispatcher
+    build: 
+      dockerfile: Dockerfile.tunnel
+    restart: always
+    command: /root/code/tunnel
+    ports:
+      - "4002:4002"
+    # networks:
+    #   - challenges_net
+
+  dispatcher:
+    environment:
+      - TIMEOUT=600
+      - SERVER_PORT=4000
+      - API_PORT=4001
+      - API_ENDPOINT=dispatcher
+      - COMMAND='/usr/bin/socat TCP-LISTEN:%s,reuseaddr,fork EXEC:"/bin/bash"'
+      - CHALLENGE_ENDPOINT=127.0.0.1
+      - CHALLENGE_PORT=8080
+      - SSL=true
+    build: 
+      dockerfile: Dockerfile.dispatcher
+    restart: always
+    command: /root/code/dispatcher
+    ports:
+      - "4000:4000"
+#     networks:
+#       - challenges_net
+      
+# networks:
+#     challenges_net:
+#         external: true
+#         name: 'challenges_net'

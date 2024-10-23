@@ -3,7 +3,7 @@
 #include <iostream>
 #include <sstream>
 
-bool apiPing(unsigned long api_port) {
+bool apiPing(std::string endpoint, unsigned long api_port) {
     int status;
     std::string answer;
     try {
@@ -13,7 +13,7 @@ bool apiPing(unsigned long api_port) {
         boost::asio::ip::tcp::socket socket(io_context);
         // Resolve the host and port
         boost::asio::ip::tcp::resolver resolver(io_context);
-        boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve("127.0.0.1", std::to_string(api_port));
+        boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(endpoint, std::to_string(api_port));
         // Connect to the server
         boost::asio::connect(socket, endpoints);
         // Send the message to the server
@@ -39,7 +39,7 @@ bool apiPing(unsigned long api_port) {
 }
 
 
-unsigned long apiGetInfoPort(unsigned long api_port, const std::string& uuid_str) {
+unsigned long apiGetInfoPort(std::string endpoint, unsigned long api_port, const std::string& uuid_str) {
     int status;
     std::string token;
     try {
@@ -49,7 +49,7 @@ unsigned long apiGetInfoPort(unsigned long api_port, const std::string& uuid_str
         boost::asio::ip::tcp::socket socket(io_context);
         // Resolve the host and port
         boost::asio::ip::tcp::resolver resolver(io_context);
-        boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve("127.0.0.1", std::to_string(api_port));
+        boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(endpoint, std::to_string(api_port));
         // Connect to the server
         boost::asio::connect(socket, endpoints);
         // Send the message to the server
@@ -81,7 +81,7 @@ unsigned long apiGetInfoPort(unsigned long api_port, const std::string& uuid_str
 }
 
 
-std::string apiAddService(unsigned long api_port, unsigned long service_port) {
+std::string apiAddService(std::string endpoint, unsigned long api_port, unsigned long service_port) {
     int status;
     std::string token;
     try {
@@ -91,7 +91,7 @@ std::string apiAddService(unsigned long api_port, unsigned long service_port) {
         boost::asio::ip::tcp::socket socket(io_context);
         // Resolve the host and port
         boost::asio::ip::tcp::resolver resolver(io_context);
-        boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve("127.0.0.1", std::to_string(api_port));
+        boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(endpoint, std::to_string(api_port));
         // Connect to the server
         boost::asio::connect(socket, endpoints);
         // Send the message to the server
