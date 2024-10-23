@@ -1,9 +1,9 @@
-// Ignore obj directory
+# Ignore obj directory
 obj/
 
-// Others .o
+# Others .o
 *.o
 
-// Executables
+# Executables
 tunnel
 dispatcher
