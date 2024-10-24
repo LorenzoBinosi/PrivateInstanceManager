@@ -1,4 +1,4 @@
-#include "NetworkInfo.hpp"
+#include "common/NetworkInfo.hpp"
 #include <iostream>
 
 // Default constructor - initializes port to 0 and time to current time (seconds resolution)

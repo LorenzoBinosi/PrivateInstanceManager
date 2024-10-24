@@ -1,6 +1,6 @@
-#include "Utils.hpp"
-#include "API.hpp"
-#include "TunnelServer.hpp"
+#include "utils/environ.hpp"
+#include "clients/APIClient.hpp"
+#include "servers/TunnelServer.hpp"
 #include <boost/asio.hpp>
 #include <iostream>
 #include <signal.h>
@@ -11,8 +11,16 @@
 int main() {
     std::string instance_endpoint = get_string_env("INSTANCE_ENDPOINT", "localhost");
     unsigned long port = get_ulong_env("TUNNEL_PORT", 4002);
+    std::string api_endpoint = get_string_env("API_ENDPOINT", "127.0.0.1");
     unsigned long api_port = get_ulong_env("API_PORT", 4001);
     boost::asio::io_context io_context;
+
+    // Printing the configuration
+    std::cout << "Starting tunnel server with the following configuration:" << std::endl;
+    std::cout << "Instance endpoint: " << instance_endpoint << std::endl;
+    std::cout << "Tunnel port: " << port << std::endl;
+    std::cout << "API endpoint: " << api_endpoint << std::endl;
+    std::cout << "API port: " << api_port << std::endl;
 
     // Determine the number of threads to use
     unsigned int num_threads = std::thread::hardware_concurrency();
@@ -31,7 +39,7 @@ int main() {
                     [&](boost::system::error_code ec, boost::asio::ip::tcp::socket socket) {
                         if (!ec) {
                             // Instantiate TunnelServer for the new connection
-                            std::make_shared<TunnelServer>(std::move(socket), api_port, instance_endpoint)->start();
+                            std::make_shared<TunnelServer>(std::move(socket), api_endpoint, api_port, instance_endpoint)->start();
                         } else {
                             std::cerr << "Accept error: " << ec.message() << std::endl;
                         }

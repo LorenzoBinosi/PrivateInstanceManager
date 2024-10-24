@@ -1,15 +1,15 @@
-#include "RegisteringServer.hpp"
-#include "APIServer.hpp"
-#include "UUID.hpp"
-#include "API.hpp"
-#include "Utils.hpp"
+#include "servers/RegistrationServer.hpp"
+#include "utils/environ.hpp"
+#include "clients/APIClient.hpp"
 #include <unordered_map>
 #include <mutex>
 #include <thread>
+#include <iostream>
 
 int main() {
     long timeout = get_long_env("TIMEOUT", 30);
     unsigned long server_port = get_ulong_env("SERVER_PORT", 4000);
+    std::string api_endpoint = get_string_env("API_ENDPOINT", "127.0.0.1");
     unsigned long api_port = get_ulong_env("API_PORT", 4001);
     std::string command = get_string_env("COMMAND", "/bin/false");
     std::string challenge_endpoint = get_string_env("CHALLENGE_ENDPOINT", "127.0.0.1");
@@ -22,8 +22,7 @@ int main() {
     }
 
     // Start the API server
-    auto apiServer = std::make_shared<APIServer>(api_port, timeout);
-    RegisteringServer server(server_port, api_port, timeout, command, challenge_endpoint, challenge_port, ssl);
+    RegistrationServer server(server_port, api_endpoint, api_port, timeout, command, challenge_endpoint, challenge_port, ssl);
 
     std::cout << "Starting server with the following configuration:" << std::endl;
     std::cout << "Timeout: " << timeout << std::endl;
@@ -34,16 +33,17 @@ int main() {
     std::cout << "Challenge port: " << challenge_port << std::endl;
     std::cout << "SSL: " << ssl << std::endl;
     
-    std::thread apiServerThread(&APIServer::start, apiServer);
-    while (!apiPing(api_port)) {
+
+    // Wait for the API server to start
+    APIClient client(api_endpoint, api_port);
+    while (!client.apiPing()) {
         std::cout << "Waiting for API server to start on port " << api_port << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // Start the registering server
-    std::thread serverThread(&RegisteringServer::start, &server);
+    std::thread serverThread(&RegistrationServer::start, &server);
 
-    apiServerThread.join();
     serverThread.join();
 
     return 0;

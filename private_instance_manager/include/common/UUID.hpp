@@ -24,7 +24,7 @@ public:
     bool operator!=(const UUID& other) const;
 
 private:
-    boost::uuids::uuid uuid;
+    boost::uuids::uuid uuid_;
 };
 
 // Define a custom specialization of std::hash for the UUID class
