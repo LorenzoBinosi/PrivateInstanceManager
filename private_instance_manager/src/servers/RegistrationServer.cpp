@@ -64,8 +64,15 @@ void RegistrationServer::handleClient(boost::asio::ip::tcp::socket client_socket
     try {
         // Create a pipe for communication between child and grandchild
         int port_pipe[2];
+        int uuid_pipe[2];
         if (pipe(port_pipe) == -1) {
             perror("pipe failed");
+            exit(EXIT_FAILURE);
+        }
+        if (pipe(uuid_pipe) == -1) {
+            perror("pipe failed");
+            close(port_pipe[0]);
+            close(port_pipe[1]);
             exit(EXIT_FAILURE);
         }
 
@@ -75,6 +82,8 @@ void RegistrationServer::handleClient(boost::asio::ip::tcp::socket client_socket
             perror("fork failed");
             close(port_pipe[0]);
             close(port_pipe[1]);
+            close(uuid_pipe[0]);
+            close(uuid_pipe[1]);
             exit(EXIT_FAILURE);
         } else if (pid == 0) {
             // Grandchild process
@@ -112,37 +121,51 @@ void RegistrationServer::handleClient(boost::asio::ip::tcp::socket client_socket
             // Close the socket as it's no longer needed
             close(sockfd);
 
-            // Write the port number to the pipe to the child process
-            char port_str[16];
+            // Write the port number to the port_pipe
+            char port_str[16] = {0};
             snprintf(port_str, sizeof(port_str), "%u", port_number);
             if (write(port_pipe[1], port_str, strlen(port_str)) < 0) {
-                perror("write failed");
+                perror("write to port_pipe failed");
                 close(port_pipe[1]);
+                close(uuid_pipe[0]);
                 exit(EXIT_FAILURE);
             }
-            close(port_pipe[1]); // Close write end
+            close(port_pipe[1]); // Close write end after writing
+
+            // Read the UUID from the uuid_pipe
+            char uuid_str[64] = {0};
+            ssize_t nbytes = read(uuid_pipe[0], uuid_str, sizeof(uuid_str) - 1);
+            if (nbytes < 0) {
+                std::cerr << "Failed to read UUID from uuid_pipe" << std::endl;
+                close(uuid_pipe[0]);
+                exit(EXIT_FAILURE);
+            }
+            close(uuid_pipe[0]); // Close read end after reading
+
+            std::cout << "Starting private instance with port " << port_number << " and UUID " << uuid_str << std::endl;
 
             // Prepare the command to run
             // Substitute the port number in the command
             char char_command[0x100] = {0};
-            snprintf(char_command, sizeof(char_command), command_.c_str(), port_number);
+            snprintf(char_command, sizeof(char_command), command_.c_str(), port_number, uuid_str);
             std::string command_(char_command);
             // Split the Docker command
             std::vector<std::string> docker_args = split_command(command_);
 
-            // Prepend 'timeout' and the duration
-            std::vector<std::string> final_args_str = {"/usr/bin/timeout", std::to_string(timeout_)};
-            final_args_str.insert(final_args_str.end(), docker_args.begin(), docker_args.end());
-
             // Convert to char* array
-            std::vector<char*> final_args;
-            for (auto& arg : final_args_str) {
-                final_args.push_back(const_cast<char*>(arg.c_str()));
+            std::vector<char*> char_docker_args;
+            for (auto& arg : docker_args) {
+                char_docker_args.push_back(const_cast<char*>(arg.c_str()));
             }
-            final_args.push_back(nullptr); 
+            char_docker_args.push_back(nullptr); 
+
+            for (auto& arg : char_docker_args) {
+                std::cout << arg << " ";
+            }
+            std::cout << std::endl;
 
             // Execute the command
-            if (execve("/usr/bin/timeout", final_args.data(), NULL) < 0) {
+            if (execve("/usr/local/bin/docker", char_docker_args.data(), NULL) < 0) {
                 perror("execve failed");
                 exit(EXIT_FAILURE);
             }
@@ -171,6 +194,7 @@ void RegistrationServer::handleClient(boost::asio::ip::tcp::socket client_socket
             }
             close(port_pipe[0]); // Close read end of port_pipe
 
+
             // Registering the service
             std::string token = client_.apiAddService(service_port);
             if (!token.empty()) {
@@ -184,6 +208,30 @@ void RegistrationServer::handleClient(boost::asio::ip::tcp::socket client_socket
             } else {
                 client_socket.write_some(boost::asio::buffer("Failed to initialize private instance\n"));
             }
+
+            // Removing - from the token
+            token.erase(std::remove(token.begin(), token.end(), '-'), token.end());
+            // Writing the UUID to the uuid_pipe
+            char uuid_str[64] = {0};
+            snprintf(uuid_str, sizeof(uuid_str), "%s", token.c_str());
+            std::cout << "UUID: " << uuid_str << std::endl;
+            if (write(uuid_pipe[1], uuid_str, strlen(uuid_str)) < 0) {
+                perror("write to uuid_pipe failed");
+                close(uuid_pipe[1]);
+                exit(EXIT_FAILURE);
+            }
+            close(uuid_pipe[1]); // Close write end after writing
+
+            // Sleep for the timeout period
+            sleep(timeout_);
+
+            // Stop the docker container gracefully
+            char* args[] = { const_cast<char*>("docker"), 
+                     const_cast<char*>("stop"), 
+                     const_cast<char*>(token.c_str()), 
+                     nullptr };
+            execve("/usr/local/bin/docker", args, nullptr);
+
             exit(0); // Child process exits
         }
     } catch (const std::exception& e) {
