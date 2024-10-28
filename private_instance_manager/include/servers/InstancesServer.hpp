@@ -1,14 +1,14 @@
-#ifndef REGISTRATIONSERVER_HPP
-#define REGISTRATIONSERVER_HPP
+#ifndef INSTANCESSERVER_HPP
+#define INSTANCESSERVER_HPP
 
 #include <boost/asio.hpp>
 #include <string>
 #include "clients/APIClient.hpp"
 
-class RegistrationServer {
+class InstancesServer {
 public:
     // Constructor to initialize the server with a specified port
-    RegistrationServer(unsigned long port, std::string api_endpoint, unsigned long api_port, long timeout, 
+    InstancesServer(unsigned long port, std::string api_endpoint, unsigned long api_port, long timeout, 
         std::string command, std::string challenge_endpoint, std::string challenge_port,
         bool ssl);
     // Method to start the server
@@ -32,4 +32,4 @@ private:
     APIClient client_;
 };
 
-#endif // REGISTRATIONSERVER_HPP
+#endif // INSTANCESSERVER_HPP

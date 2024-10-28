@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include "servers/RegistrationServer.hpp"
+#include "servers/InstancesServer.hpp"
 #include "clients/APIClient.hpp"
 #include "utils/command_line.hpp"
 
@@ -13,7 +13,7 @@ static void sigchld_handler(int /*signum*/) {
 }
 
 // Constructor to initialize the acceptor with the given port
-RegistrationServer::RegistrationServer(unsigned long port, std::string api_endpoint, unsigned long api_port,
+InstancesServer::InstancesServer(unsigned long port, std::string api_endpoint, unsigned long api_port,
     long timeout, std::string command, std::string challenge_endpoint, 
     std::string challenge_port, bool ssl)
     : port_(port), 
@@ -30,7 +30,7 @@ RegistrationServer::RegistrationServer(unsigned long port, std::string api_endpo
 }
 
 // Start method to run the server and handle incoming connections
-void RegistrationServer::start() {
+void InstancesServer::start() {
     std::cout << "Waiting for incoming connections on port " << port_ << std::endl;
     while (true) {
         try {
@@ -60,7 +60,7 @@ void RegistrationServer::start() {
 }
 
 // Function to handle client connections
-void RegistrationServer::handleClient(boost::asio::ip::tcp::socket client_socket) {
+void InstancesServer::handleClient(boost::asio::ip::tcp::socket client_socket) {
     try {
         // Create a pipe for communication between child and grandchild
         int port_pipe[2];

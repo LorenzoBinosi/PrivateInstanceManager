@@ -1,4 +1,4 @@
-#include "servers/RegistrationServer.hpp"
+#include "servers/InstancesServer.hpp"
 #include "utils/environ.hpp"
 #include "clients/APIClient.hpp"
 #include <unordered_map>
@@ -22,7 +22,7 @@ int main() {
     }
 
     // Start the API server
-    RegistrationServer server(server_port, api_endpoint, api_port, timeout, command, challenge_endpoint, challenge_port, ssl);
+    InstancesServer server(server_port, api_endpoint, api_port, timeout, command, challenge_endpoint, challenge_port, ssl);
 
     std::cout << "Starting server with the following configuration:" << std::endl;
     std::cout << "Timeout: " << timeout << std::endl;
@@ -42,7 +42,7 @@ int main() {
     }
 
     // Start the registering server
-    std::thread serverThread(&RegistrationServer::start, &server);
+    std::thread serverThread(&InstancesServer::start, &server);
 
     serverThread.join();
 
