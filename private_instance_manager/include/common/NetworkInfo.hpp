@@ -9,18 +9,23 @@ public:
     // Default constructor - sets port to 0 and timestamp to current time in seconds
     NetworkInfo();
     // Constructor with endpoint
-    NetworkInfo(int port);
+    NetworkInfo(std::string& address, long unsigned port);
+    // Getter for address
+    std::string getEndpointAddress() const;
     // Getter for port
-    int getPort() const;
+    long unsigned getEndpointPort() const;
     // Getter for timestamp
     boost::posix_time::ptime getTimestamp() const;
+    // Setter for address
+    void setEndpointAddress(std::string& address);
     // Setter for port
-    void setPort(int port);
+    void setEndpointPort(long unsigned port);
     // Setter for timestamp
     void setTimestamp(const boost::posix_time::ptime& timestamp);
 
 private:
-    boost::asio::ip::tcp::endpoint endpoint_;
+    std::string endpoint_address_;
+    long unsigned endpoint_port_;
     boost::posix_time::ptime timestamp_;
 };
 

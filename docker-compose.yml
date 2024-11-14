@@ -1,33 +1,46 @@
 services:
   tunnel:
     environment:
-      - TIMEOUT=600
+      - TIMEOUT=60
       - TUNNEL_PORT=4002
+      - API_ADDRESS=api
       - API_PORT=4001
-      - INSTANCE_ENDPOINT=dispatcher
+      - INSTANCE_ENDPOINT=registration
     build: 
       dockerfile: Dockerfile.tunnel
     restart: always
-    command: /root/code/tunnel
+    command: /root/private_instance_manager/TunnelServerApp
     ports:
       - "4002:4002"
     # networks:
     #   - challenges_net
 
-  dispatcher:
+  api:
     environment:
-      - TIMEOUT=600
+      - TIMEOUT=60
+      - API_PORT=4001
+    build: 
+      dockerfile: Dockerfile.api
+    restart: always
+    command: /root/private_instance_manager/APIServerApp
+
+  instances:
+    environment:
+      - TIMEOUT=60
       - SERVER_PORT=4000
       - API_PORT=4001
-      - API_ENDPOINT=dispatcher
-      - COMMAND='/usr/bin/socat TCP-LISTEN:%s,reuseaddr,fork EXEC:"/bin/bash"'
+      - API_ADDRESS=api
+      - INSTANCES_ADDRESS=instances
+      - DOCKER_COMMAND='/usr/local/bin/docker run -d --rm -p %d:4000 --name %s -t challenge'
       - CHALLENGE_ENDPOINT=127.0.0.1
       - CHALLENGE_PORT=8080
       - SSL=true
     build: 
-      dockerfile: Dockerfile.dispatcher
+      dockerfile: Dockerfile.instances
+    # Need privilage to run docker in docker
+    privileged: true
     restart: always
-    command: /root/code/dispatcher
+    command: /root/challenge/init
     ports:
       - "4000:4000"
 #     networks:

@@ -27,8 +27,9 @@ enum class StatusCode {
 
 class APIServer : public std::enable_shared_from_this<APIServer> {
 public:
-    APIServer(unsigned short port, long timeout_seconds, long cleanup_interval = 10);
+    APIServer(unsigned short port, long timeout_seconds, long cleanup_interval = 10, unsigned short num_threads = 0);
     void start();
+    void stop();
 
 private:
     // Networking Methods
@@ -54,10 +55,12 @@ private:
     boost::asio::io_context io_context_;
     boost::asio::ip::tcp::acceptor acceptor_;
     std::shared_ptr<boost::asio::deadline_timer> cleanup_timer_;
-
     // Shared map to store tokens and network information
     std::unordered_map<UUID, NetworkInfo> tokens_;
     std::mutex tokens_mutex_;
+    // Thread pool
+    unsigned short num_threads_;
+    std::vector<std::thread> threads_;
 };
 
 #endif // APISERVER_HPP

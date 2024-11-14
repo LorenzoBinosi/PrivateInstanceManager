@@ -4,25 +4,46 @@
 #include <iostream>
 #include <sstream>
 
-APIServer::APIServer(unsigned short port, long timeout_seconds, long cleanup_interval)
+APIServer::APIServer(unsigned short port, long timeout_seconds, long cleanup_interval, unsigned short num_threads)
     : port_(port),
       timeout_seconds_(timeout_seconds),
       cleanup_interval_(cleanup_interval),
-      acceptor_(io_context_, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)) {}
+      acceptor_(io_context_, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)),
+      num_threads_(num_threads) {
+    if (num_threads_ == 0) {
+        num_threads_ = std::thread::hardware_concurrency();
+        if (num_threads_ == 0) {
+            num_threads_ = 1;
+        }
+    }
+}
+
 
 void APIServer::start() {
-    std::cout << "Server started" << std::endl;
+    std::cout << "Server started." << std::endl;
     scheduleTokenCleanup();
-    std::cout << "Token cleanup scheduled every " << cleanup_interval_ << " seconds" << std::endl;
+    std::cout << "Token cleanup scheduled every " << cleanup_interval_ << " seconds." << std::endl;
+    std::cout << "Using " << num_threads_ << " threads." << std::endl;
+    std::cout << "Waiting for incoming connections on port " << port_ << "." << std::endl;
     doAccept();
-    std::cout << "Waiting for incoming connections on port " << port_ << std::endl;
-    io_context_.run();
+    for (unsigned int i = 0; i < num_threads_; ++i) {
+        threads_.emplace_back([this]() {
+            io_context_.run();
+        });
+    }
+}
+
+void APIServer::stop() {
+    io_context_.stop();
+    // Wait for all threads to finish
+    for (auto& t : threads_) {
+        t.join();
+    }
 }
 
 void APIServer::scheduleTokenCleanup() {
     auto self = shared_from_this();
     cleanup_timer_ = std::make_shared<boost::asio::deadline_timer>(io_context_, boost::posix_time::seconds(cleanup_interval_));
-
     cleanup_timer_->async_wait([self](const boost::system::error_code& ec) {
         if (!ec) {
             self->removeExpiredTokens();
@@ -99,16 +120,19 @@ std::string APIServer::processCommand(const std::string& command) {
 
 std::string APIServer::addService(std::stringstream& ss) {
     unsigned short port;
-    ss >> port;
+    std::string address;
 
+    ss >> address;
+    if (ss.fail()) {
+        return statusMessage(StatusCode::BadRequest) + " Missing service name\n";
+    }
+    ss >> port;
     if (ss.fail() || port == 0) {
         return statusMessage(StatusCode::BadRequest) + " Invalid port number\n";
     }
-
     // Generate a new UUID outside the lock
     UUID new_uuid;
     bool is_unique = false;
-
     // Try to generate a unique UUID
     while (!is_unique) {
         new_uuid = UUID(); // Generate a new UUID
@@ -116,7 +140,7 @@ std::string APIServer::addService(std::stringstream& ss) {
         std::lock_guard<std::mutex> lock(tokens_mutex_);
         if (tokens_.find(new_uuid) == tokens_.end()) {
             // Unique UUID found, add to tokens
-            NetworkInfo network_info(port);
+            NetworkInfo network_info(address, port);
             tokens_[new_uuid] = network_info;
             is_unique = true; // Exit loop
         }
@@ -158,16 +182,15 @@ std::string APIServer::getInfo(std::stringstream& ss) {
     boost::posix_time::ptime now = boost::posix_time::second_clock::universal_time();
     long seconds_elapsed = (now - network_info.getTimestamp()).total_seconds();
     long time_remaining = timeout_seconds_ - seconds_elapsed;
-
     if (time_remaining <= 0) {
         return statusMessage(StatusCode::Gone) + " UUID has expired\n";
     }
-
-    // Returning "200 Port: <port> TimeRemaining: <seconds>\n"
+    // Returning "200 Port: <port> - TimeRemaining: <seconds> - ServiceName: <service_name>\n"
     std::ostringstream response;
     response << statusMessage(StatusCode::OK)
-             << " Port: " << network_info.getPort()
-             << " - TimeRemaining: " << time_remaining << "\n";
+             << " Port: " << network_info.getEndpointPort()
+             << " - TimeRemaining: " << time_remaining 
+             << " - ServiceName: " << network_info.getEndpointAddress() << "\n";
     return response.str();
 }
 

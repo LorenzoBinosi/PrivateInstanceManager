@@ -1,6 +1,7 @@
 #include "servers/InstancesServer.hpp"
 #include "utils/environ.hpp"
 #include "clients/APIClient.hpp"
+#include "utils/strings.hpp"
 #include <unordered_map>
 #include <mutex>
 #include <thread>
@@ -8,43 +9,44 @@
 
 int main() {
     long timeout = get_long_env("TIMEOUT", 30);
-    unsigned long server_port = get_ulong_env("SERVER_PORT", 4000);
-    std::string api_endpoint = get_string_env("API_ENDPOINT", "127.0.0.1");
-    unsigned long api_port = get_ulong_env("API_PORT", 4001);
-    std::string command = get_string_env("COMMAND", "/bin/false");
-    std::string challenge_endpoint = get_string_env("CHALLENGE_ENDPOINT", "127.0.0.1");
+    unsigned short server_port = get_ushort_env("SERVER_PORT", 4000);
+    std::string api_address = get_string_env("API_ADDRESS", "127.0.0.1");
+    unsigned short api_port = get_ushort_env("API_PORT", 4001);
+    std::string docker_command = get_string_env("DOCKER_COMMAND", "");
+    std::string bash_command = get_string_env("BASH_COMMAND", "");
+    std::string challenge_address = get_string_env("CHALLENGE_ADDRESS", "127.0.0.1");
+    std::string instances_address = get_string_env("INSTANCES_ADDRESS", "this_container"); // Name of the container that runs the instance
     std::string challenge_port = get_string_env("CHALLENGE_PORT", "8080");
     bool ssl = get_bool_env("SSL", false);
 
-    // If first and last characters are quotes, remove them
-    if ((command.front() == '"' && command.back() == '"') || (command.front() == '\'' && command.back() == '\'')) {
-        command = command.substr(1, command.size() - 2);
+    // If none of the commands are provided, exit
+    if (docker_command.empty() && bash_command.empty()) {
+        std::cerr << "No command provided. Exiting..." << std::endl;
+        return 1;
     }
-
+    // Remove quotes from the commands
+    docker_command = remove_quotes(docker_command);
+    bash_command = remove_quotes(bash_command);
+    // Determine the command
+    std::string command;
+    CommandType cmd_type;
+    if (!docker_command.empty()) {
+        cmd_type = CommandType::Docker;
+        command = docker_command;
+    } else if (!bash_command.empty()) {
+        cmd_type = CommandType::Bash;
+        command = bash_command;
+    } else {
+        std::cerr << "Invalid command provided. Exiting..." << std::endl;
+        return 1;
+    }
     // Start the API server
-    InstancesServer server(server_port, api_endpoint, api_port, timeout, command, challenge_endpoint, challenge_port, ssl);
-
-    std::cout << "Starting server with the following configuration:" << std::endl;
-    std::cout << "Timeout: " << timeout << std::endl;
-    std::cout << "Server port: " << server_port << std::endl;
-    std::cout << "API port: " << api_port << std::endl;
-    std::cout << "Command: " << command << std::endl;
-    std::cout << "Challenge endpoint: " << challenge_endpoint << std::endl;
-    std::cout << "Challenge port: " << challenge_port << std::endl;
-    std::cout << "SSL: " << ssl << std::endl;
-    
-
-    // Wait for the API server to start
-    APIClient client(api_endpoint, api_port);
-    while (!client.apiPing()) {
-        std::cout << "Waiting for API server to start on port " << api_port << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::shared_ptr<InstancesServer> server = std::make_shared<InstancesServer>(server_port, api_address, api_port, timeout, 
+                           instances_address, command, challenge_address, challenge_port,
+                           ssl, cmd_type);
+    server->start();
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::hours(24 * 365));
     }
-
-    // Start the registering server
-    std::thread serverThread(&InstancesServer::start, &server);
-
-    serverThread.join();
-
     return 0;
 }

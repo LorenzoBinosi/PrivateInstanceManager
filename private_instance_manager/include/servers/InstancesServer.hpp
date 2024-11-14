@@ -5,31 +5,44 @@
 #include <string>
 #include "clients/APIClient.hpp"
 
-class InstancesServer {
+enum class CommandType {
+    Docker,
+    Bash
+};
+
+class InstancesServer : public std::enable_shared_from_this<InstancesServer> {
 public:
-    // Constructor to initialize the server with a specified port
-    InstancesServer(unsigned long port, std::string api_endpoint, unsigned long api_port, long timeout, 
-        std::string command, std::string challenge_endpoint, std::string challenge_port,
-        bool ssl);
-    // Method to start the server
+    InstancesServer(unsigned short port, std::string& api_address, unsigned short api_port, long timeout, 
+        std::string& instance_address, std::string& command, std::string& challenge_address, 
+        std::string& challenge_port, bool ssl, CommandType cmd_type, unsigned int num_threads = 0);
     void start();
+    void stop();
 
 private:
     // Method to handle client connections
+    void doAccept();
     void handleClient(boost::asio::ip::tcp::socket client_socket);
+    void runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket);
+    void runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket);
+
 
     // Attributes
-    unsigned long port_;
-    std::string api_endpoint_;
-    unsigned long api_port_;
+    unsigned short port_;
+    std::string api_address_;
+    unsigned short api_port_;
     long timeout_;
     boost::asio::io_context io_context_;
     boost::asio::ip::tcp::acceptor acceptor_;
+    std::string instance_address_;
     std::string command_;
-    std::string challenge_endpoint_;
+    std::string challenge_address_;
     std::string challenge_port_;
     bool ssl_;
-    APIClient client_;
+    // Command to run
+    std::function<void(std::shared_ptr<boost::asio::ip::tcp::socket>)> run_command;
+    // Thread pool
+    unsigned int num_threads_;
+    std::vector<std::thread> threads_;
 };
 
 #endif // INSTANCESSERVER_HPP

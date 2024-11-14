@@ -6,5 +6,5 @@ RUN apt-get update && \
     apt-get clean
 COPY private_instance_manager /root/private_instance_manager
 WORKDIR /root/private_instance_manager
-RUN make clean && make tunnel
+RUN make clean && make api
 

@@ -1,0 +1,36 @@
+# Use the official Docker-in-Docker image based on Alpine Linux
+FROM docker:dind
+
+# Install required packages using Alpine's package manager (apk)
+RUN apk update && \
+    apk add --no-cache \
+        gcc \
+        g++ \
+        boost-dev \
+        make \
+        socat \
+        bash \
+        curl \
+        git
+
+# Optional: Install additional dependencies if needed
+# For example, if your projects require other Boost libraries or tools
+
+# Copy the private_instance_manager and challenge directories into the container
+COPY private_instance_manager /root/private_instance_manager
+COPY challenge /root/challenge
+
+# Build the private_instance_manager
+WORKDIR /root/private_instance_manager
+RUN make clean && make instances
+
+# Prepare the challenge directory
+WORKDIR /root/challenge
+RUN chmod +x start.sh
+
+# Set the entrypoint to start Docker daemon and keep the container running
+# This ensures that the Docker daemon is running when the container starts
+ENTRYPOINT ["/root/challenge/start.sh"]
+
+# Default command to keep the container running
+CMD ["sh"]
