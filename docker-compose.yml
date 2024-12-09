@@ -1,7 +1,6 @@
 services:
   tunnel:
     environment:
-      - TIMEOUT=60
       - TUNNEL_PORT=4002
       - API_ADDRESS=api
       - API_PORT=4001
