@@ -11,8 +11,8 @@ services:
     command: /root/private_instance_manager/TunnelServerApp
     ports:
       - "4002:4002"
-    # networks:
-    #   - challenges_net
+    networks:
+      - private_instance_net
 
   api:
     environment:
@@ -22,6 +22,8 @@ services:
       dockerfile: Dockerfile.api
     restart: always
     command: /root/private_instance_manager/APIServerApp
+    networks:
+      - private_instance_net
 
   instances:
     environment:
@@ -42,10 +44,11 @@ services:
     command: /root/challenge/init
     ports:
       - "4000:4000"
-#     networks:
-#       - challenges_net
-      
-# networks:
-#     challenges_net:
-#         external: true
-#         name: 'challenges_net'
+    networks:
+      - private_instance_net
+
+networks:
+  private_instance_net:
+    driver: bridge
+    external: false
+    name: "private_instance_net"
