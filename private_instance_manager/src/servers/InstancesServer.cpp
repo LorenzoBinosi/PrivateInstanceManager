@@ -4,6 +4,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <cstring>
+#include <boost/process.hpp>
 #include "servers/InstancesServer.hpp"
 #include "clients/APIClient.hpp"
 #include "utils/command_line.hpp"
@@ -91,7 +94,69 @@ InstancesServer::InstancesServer(unsigned short port, std::string& api_address, 
 }
 
 void InstancesServer::runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket) {
-    system(command_.c_str());
+    boost::process::ipstream output;
+    std::string line;
+
+    auto self = shared_from_this();
+    // Getting the API client
+    APIClient& api_client = get_thread_api_client(api_address_, api_port_);
+    // Running the command - Need to be a shared pointer
+    auto process = std::make_shared<boost::process::child>(command_.c_str(), boost::process::std_out > output);
+    // Getting the port. Output is "Listening on port: <port>\n"
+    std::getline(output, line);
+    std::vector<std::string> tokens = split_command(line);
+    if (tokens.size() < 4) {
+        boost::asio::async_write(*client_socket, boost::asio::buffer("Failed to obtain a free port\n"),
+            [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
+                if (ec) {
+                    std::cerr << "Write error: " << ec.message() << std::endl;
+                }
+                client_socket->close();
+            });
+        return;
+    }
+    unsigned short port = std::stoull(tokens[3]);
+    // Getting the UUID
+    auto result = api_client.apiAddService(instance_address_, port);
+    if (!result) {
+        boost::asio::async_write(*client_socket, boost::asio::buffer("Failed to add a service!\n"),
+            [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
+                if (ec) {
+                    std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
+                }
+                client_socket->close();
+            });
+        return;
+    }
+    std::string token = *result;
+    client_socket->write_some(boost::asio::buffer("Initialized private instance with token: " + token + "\n"));
+    // Construct the challenge URL
+    std::string connection_info = "ncat ";
+    if (ssl_)
+        connection_info += "--ssl ";
+    connection_info += challenge_address_ + " " + challenge_port_;
+    client_socket->write_some(boost::asio::buffer("Use it at: " + connection_info + "\n"));
+    // Wait the timeout asynchronously
+    auto timer = std::make_shared<boost::asio::steady_timer>(io_context_, std::chrono::seconds(timeout_));
+    timer->async_wait([self, client_socket, process, timer] (const boost::system::error_code& ec) {
+        if (!ec) {
+            process->terminate();
+            process->wait();
+            boost::asio::async_write(*client_socket, boost::asio::buffer("Terminating the instance...\n"),
+                [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
+                    if (ec) {
+                        std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
+                    }
+                    client_socket->close();
+                });
+        }
+        else
+        {
+            std::cerr << "Timer error: " << ec.message() << std::endl;
+            client_socket->close();
+        }
+    });
+    
 }
 
 void InstancesServer::runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket) {
