@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <cstring>
 #include <boost/process.hpp>
+#include <boost/process/extend.hpp>
 #include "servers/InstancesServer.hpp"
 #include "clients/APIClient.hpp"
 #include "utils/command_line.hpp"
@@ -65,7 +66,7 @@ static APIClient& get_thread_api_client(const std::string& api_endpoint, unsigne
 // Constructor to initialize the acceptor with the given port
 InstancesServer::InstancesServer(unsigned short port, std::string& api_address, unsigned short api_port,
     long timeout, std::string& instance_address, std::string& command, std::string& challenge_address, 
-    std::string& challenge_port, bool ssl, CommandType cmd_type, unsigned int num_threads)
+    std::string& challenge_port, bool ssl, CommandType cmd_type, unsigned int user_id, unsigned int group_id, unsigned int num_threads)
     : port_(port),
       api_address_(api_address),
       api_port_(api_port),
@@ -75,7 +76,9 @@ InstancesServer::InstancesServer(unsigned short port, std::string& api_address, 
       command_(command),
       challenge_address_(challenge_address),
       challenge_port_(challenge_port), 
-      ssl_(ssl) {
+      ssl_(ssl),
+      user_id_(user_id),
+      group_id_(group_id) {
     if (num_threads_ == 0) {
         num_threads_ = std::thread::hardware_concurrency();
         if (num_threads_ == 0) {
@@ -96,12 +99,25 @@ InstancesServer::InstancesServer(unsigned short port, std::string& api_address, 
 void InstancesServer::runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket) {
     boost::process::ipstream output;
     std::string line;
+    uid_t user_id = user_id_;
+    gid_t group_id = group_id_;
 
     auto self = shared_from_this();
     // Getting the API client
     APIClient& api_client = get_thread_api_client(api_address_, api_port_);
+    // Dropping privileges
+    auto on_setup_fn = [user_id, group_id]() {
+        if (setgid(user_id) != 0) {
+            perror("setgid failed");
+            exit(1);
+        }
+        if (setuid(group_id) != 0) {
+            perror("setuid failed");
+            exit(1);
+        }
+    };
     // Running the command - Need to be a shared pointer
-    auto process = std::make_shared<boost::process::child>(command_.c_str(), boost::process::std_out > output);
+    auto process = std::make_shared<boost::process::child>(command_.c_str(), boost::process::std_out > output, boost::process::extend::on_setup(on_setup_fn));
     // Getting the port. Output is "Listening on port: <port>\n"
     std::getline(output, line);
     std::vector<std::string> tokens = split_command(line);
@@ -156,7 +172,6 @@ void InstancesServer::runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socke
             client_socket->close();
         }
     });
-    
 }
 
 void InstancesServer::runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket) {

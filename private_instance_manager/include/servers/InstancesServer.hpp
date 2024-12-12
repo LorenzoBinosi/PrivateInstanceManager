@@ -14,7 +14,7 @@ class InstancesServer : public std::enable_shared_from_this<InstancesServer> {
 public:
     InstancesServer(unsigned short port, std::string& api_address, unsigned short api_port, long timeout, 
         std::string& instance_address, std::string& command, std::string& challenge_address, 
-        std::string& challenge_port, bool ssl, CommandType cmd_type, unsigned int num_threads = 0);
+        std::string& challenge_port, bool ssl, CommandType cmd_type, unsigned int user_id, unsigned int group_id, unsigned int num_threads = 0);
     void start();
     void stop();
 
@@ -37,6 +37,8 @@ private:
     std::string command_;
     std::string challenge_address_;
     std::string challenge_port_;
+    uid_t user_id_;
+    gid_t group_id_;
     bool ssl_;
     // Command to run
     std::function<void(std::shared_ptr<boost::asio::ip::tcp::socket>)> run_command;

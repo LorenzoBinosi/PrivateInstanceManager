@@ -15,6 +15,13 @@ long get_long_env(const char *name, unsigned long default_value) {
     return strtol(env_str, NULL, 10);
 }
 
+unsigned int get_uint_env(const char *name, unsigned int default_value) {
+    const char *env_str = getenv(name);
+    if (env_str == NULL)
+        return default_value;
+    return static_cast<unsigned int>(strtoul(env_str, NULL, 10));
+}
+
 unsigned short get_ushort_env(const char *name, unsigned short default_value) {
     const char *env_str = getenv(name);
     if (env_str == NULL)

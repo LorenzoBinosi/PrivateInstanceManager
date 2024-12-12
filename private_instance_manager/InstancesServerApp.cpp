@@ -17,6 +17,8 @@ int main() {
     std::string challenge_address = get_string_env("CHALLENGE_ADDRESS", "127.0.0.1");
     std::string instances_address = get_string_env("INSTANCES_ADDRESS", "this_container"); // Name of the container that runs the instance
     std::string challenge_port = get_string_env("CHALLENGE_PORT", "8080");
+    unsigned int user_id = get_uint_env("USER_ID", 1000);
+    unsigned int group_id = get_uint_env("GROUP_ID", 1000);
     bool ssl = get_bool_env("SSL", false);
 
     // If none of the commands are provided, exit
