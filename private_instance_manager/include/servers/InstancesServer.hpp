@@ -37,9 +37,9 @@ private:
     std::string command_;
     std::string challenge_address_;
     std::string challenge_port_;
+    bool ssl_;
     uid_t user_id_;
     gid_t group_id_;
-    bool ssl_;
     // Command to run
     std::function<void(std::shared_ptr<boost::asio::ip::tcp::socket>)> run_command;
     // Thread pool

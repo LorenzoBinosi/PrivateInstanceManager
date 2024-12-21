@@ -17,8 +17,8 @@ int main() {
     std::string challenge_address = get_string_env("CHALLENGE_ADDRESS", "127.0.0.1");
     std::string instances_address = get_string_env("INSTANCES_ADDRESS", "this_container"); // Name of the container that runs the instance
     std::string challenge_port = get_string_env("CHALLENGE_PORT", "8080");
-    unsigned int user_id = get_uint_env("USER_ID", 1000);
-    unsigned int group_id = get_uint_env("GROUP_ID", 1000);
+    unsigned int user_id = get_uint_env("USER_UID", 1000);
+    unsigned int group_id = get_uint_env("USER_GID", 1000);
     bool ssl = get_bool_env("SSL", false);
 
     // If none of the commands are provided, exit
@@ -45,7 +45,7 @@ int main() {
     // Start the API server
     std::shared_ptr<InstancesServer> server = std::make_shared<InstancesServer>(server_port, api_address, api_port, timeout, 
                            instances_address, command, challenge_address, challenge_port,
-                           ssl, cmd_type);
+                           ssl, cmd_type, user_id, group_id);
     server->start();
     while (true) {
         std::this_thread::sleep_for(std::chrono::hours(24 * 365));

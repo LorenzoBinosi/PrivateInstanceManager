@@ -106,7 +106,7 @@ void InstancesServer::runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socke
     // Getting the API client
     APIClient& api_client = get_thread_api_client(api_address_, api_port_);
     // Dropping privileges
-    auto on_setup_fn = [user_id, group_id]() {
+    auto on_setup_fn = [user_id, group_id](auto &e) {
         if (setgid(user_id) != 0) {
             perror("setgid failed");
             exit(1);
@@ -117,7 +117,7 @@ void InstancesServer::runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socke
         }
     };
     // Running the command - Need to be a shared pointer
-    auto process = std::make_shared<boost::process::child>(command_.c_str(), boost::process::std_out > output, boost::process::extend::on_setup(on_setup_fn));
+    auto process = std::make_shared<boost::process::child>(command_.c_str(), boost::process::std_out > output, boost::process::extend::on_exec_setup(on_setup_fn));
     // Getting the port. Output is "Listening on port: <port>\n"
     std::getline(output, line);
     std::vector<std::string> tokens = split_command(line);
@@ -145,33 +145,37 @@ void InstancesServer::runBashCommand(std::shared_ptr<boost::asio::ip::tcp::socke
         return;
     }
     std::string token = *result;
-    client_socket->write_some(boost::asio::buffer("Initialized private instance with token: " + token + "\n"));
+    std::string msg = "Initialized private instance with token: " + token + "\n";
     // Construct the challenge URL
     std::string connection_info = "ncat ";
     if (ssl_)
         connection_info += "--ssl ";
     connection_info += challenge_address_ + " " + challenge_port_;
-    client_socket->write_some(boost::asio::buffer("Use it at: " + connection_info + "\n"));
-    // Wait the timeout asynchronously
-    auto timer = std::make_shared<boost::asio::steady_timer>(io_context_, std::chrono::seconds(timeout_));
-    timer->async_wait([self, client_socket, process, timer] (const boost::system::error_code& ec) {
-        if (!ec) {
-            process->terminate();
-            process->wait();
-            boost::asio::async_write(*client_socket, boost::asio::buffer("Terminating the instance...\n"),
-                [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
-                    if (ec) {
-                        std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
-                    }
-                    client_socket->close();
-                });
-        }
-        else
-        {
-            std::cerr << "Timer error: " << ec.message() << std::endl;
-            client_socket->close();
-        }
-    });
+    msg += "Use it at: " + connection_info + "\n";
+    boost::asio::async_write(*client_socket, boost::asio::buffer(msg),
+        [self, client_socket, process](boost::system::error_code ec, std::size_t /*length*/) {
+            if (ec) {
+                std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
+                client_socket->close();
+            } 
+            // Wait the timeout asynchronously
+            auto timer = std::make_shared<boost::asio::steady_timer>(self->io_context_, std::chrono::seconds(self->timeout_));
+            timer->async_wait([self, client_socket, process, timer] (const boost::system::error_code& ec) {
+                if (ec) 
+                    std::cerr << "Timer error: " << ec.message() << std::endl;
+                boost::asio::async_write(*client_socket, boost::asio::buffer("Terminating the instance...\n"),
+                    [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
+                        if (ec) {
+                            std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
+                        }
+                        client_socket->close();
+                    });
+                if (process->valid()) {
+                    process->terminate();
+                    process->wait();
+                }
+            });
+        });
 }
 
 void InstancesServer::runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::socket> client_socket) {
@@ -188,6 +192,7 @@ void InstancesServer::runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::soc
                 }
                 client_socket->close();
             });
+        return;
     }
     // Getting the UUID
     auto result = api_client.apiAddService(instance_address_, port);
@@ -200,7 +205,6 @@ void InstancesServer::runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::soc
                 client_socket->close();
             });
         return;
-        
     }
     std::shared_ptr<std::string> token = std::make_shared<std::string>(*result);
     // Running the docker command
@@ -217,46 +221,46 @@ void InstancesServer::runDockerCommand(std::shared_ptr<boost::asio::ip::tcp::soc
             });
         return;
     }
-    client_socket->write_some(boost::asio::buffer("Initialized private instance with token: " + *token + "\n"));
+    std::string msg = "Initialized private instance with token: " + *token + "\n";
     // Construct the challenge URL
     std::string connection_info = "ncat ";
     if (ssl_)
         connection_info += "--ssl ";
     connection_info += challenge_address_ + " " + challenge_port_;
-    client_socket->write_some(boost::asio::buffer("Use it at: " + connection_info + "\n"));
-    // Wait the timeout asynchronously
-    auto timer = std::make_shared<boost::asio::steady_timer>(io_context_, std::chrono::seconds(timeout_));
-    timer->async_wait([self, client_socket, token, timer](const boost::system::error_code& ec) {
-        if (!ec) {
-            // Stopping the docker container
-            char char_command[256] = {0}; // TODO - Dynamic allocation
-            snprintf(char_command, sizeof(char_command), "docker stop %s", token->c_str());
-            int status = system(char_command);
-            if (status == -1) {
-                boost::asio::async_write(*client_socket, boost::asio::buffer("Failed to stop the instance\n"),
+    msg += "Use it at: " + connection_info + "\n";
+    boost::asio::async_write(*client_socket, boost::asio::buffer(msg),
+        [self, client_socket, token](boost::system::error_code ec, std::size_t /*length*/) {
+            if (ec) {
+                std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
+                client_socket->close();
+            } 
+            // Wait the timeout asynchronously
+            auto timer = std::make_shared<boost::asio::steady_timer>(self->io_context_, std::chrono::seconds(self->timeout_));
+            timer->async_wait([self, client_socket, token, timer] (const boost::system::error_code& ec) {
+                if (ec) 
+                    std::cerr << "Timer error: " << ec.message() << std::endl;
+                boost::asio::async_write(*client_socket, boost::asio::buffer("Terminating the instance...\n"),
                     [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
                         if (ec) {
                             std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
                         }
                         client_socket->close();
                     });
-                return;
-            }
-            boost::asio::async_write(*client_socket, boost::asio::buffer("Terminating the instance...\n"),
-                [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
-                    if (ec) {
-                        std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
-                    }
-                    client_socket->close();
-                });
-        }
-        else
-        {
-            std::cerr << "Timer error: " << ec.message() << std::endl;
-            client_socket->close();
-        }
-    });
-
+                char char_command[256] = {0}; // TODO - Dynamic allocation
+                snprintf(char_command, sizeof(char_command), "docker stop %s", token->c_str());
+                int status = system(char_command);
+                if (status == -1) {
+                    std::cerr << "Failed to stop the instance!" << std::endl;
+                    boost::asio::async_write(*client_socket, boost::asio::buffer("Failed to stop the instance\n"),
+                        [client_socket](boost::system::error_code ec, std::size_t /*length*/) {
+                            if (ec) {
+                                std::cerr << "Failed to write to client socket: " << ec.message() << std::endl;
+                            }
+                            client_socket->close();
+                        });
+                }
+            });
+        });
 }
 
 // Start method to run the server and handle incoming connections
